@@ -1,20 +1,37 @@
 /*
- * @Author: lxk0301 https://gitee.com/lxk0301
- * @Date: 2020-08-19 16:12:40
- * @Last Modified by: whyour
- * @Last Modified time: 2021-5-1 15:00:54
  * sendNotify 推送通知功能
  * @param text 通知头
  * @param desp 通知体
  * @param params 某些推送通知方式点击弹窗可跳转, 例：{ url: 'https://abc.com' }
  * @param author 作者仓库等信息  例：`本通知 By：https://github.com/whyour/qinglong`
+ 部分变量设置
+## 拆分通知
+export BEANCHANGE_PERSENT="10"
+## 如果通知标题在此变量里面存在(&隔开),则用屏蔽不发送通知
+export NOTIFY_SKIP_LIST="京东CK检测&京东资产变动"
+## 当接收到发送CK失效通知和Ninja 运行通知时候执行子线程任务
+export NOTIFY_CKTASK="jd_CheckCK.js"
+## 如果此变量(&隔开)的关键字在通知内容里面存在,则屏蔽不发送通知.
+export NOTIFY_SKIP_TEXT="忘了种植&异常"
+## 屏蔽任务脚本的ck失效通知
+export NOTIFY_NOCKFALSE="true"
+## 服务器空数据等错误不触发通知
+export CKNOWARNERROR="true"
+## 屏蔽青龙登陆成功通知，登陆失败不屏蔽
+export NOTIFY_NOLOGINSUCCESS="true"
+## 通知底部显示
+export NOTIFY_AUTHOR="来源于：https://github.com/KingRan/KR"
+## 增加NOTIFY_AUTHOR_BLANK 环境变量，控制不显示底部信息
+export NOTIFY_AUTHOR_BLANK="true"
+## 增加NOTIFY_AUTOCHECKCK为true才开启通知脚本内置的自动禁用过期ck
+export NOTIFY_AUTOCHECKCK=“true”
  */
 //详细说明参考 https://github.com/ccwav/QLScript2.
 const querystring = require('querystring');
 const exec = require('child_process').exec;
 const $ = new Env();
 const timeout = 15000; //超时时间(单位毫秒)
-//console.log("加载sendNotify，当前版本: 20220516");
+console.log("加载sendNotify，当前版本: 20220517");
 // =======================================go-cqhttp通知设置区域===========================================
 //gobot_url 填写请求地址http://127.0.0.1/send_private_msg
 //gobot_token 填写在go-cqhttp文件设置的访问密钥
@@ -28,11 +45,6 @@ let GOBOT_QQ = ''; // 如果GOBOT_URL设置 /send_private_msg 则需要填入 us
 //此处填你申请的SCKEY.
 //(环境变量名 PUSH_KEY)
 let SCKEY = '';
-
-// =======================================PushDeer通知设置区域===========================================
-//此处填你申请的PushDeer KEY.
-//(环境变量名 DEER_KEY)
-let PUSHDEER_KEY = '';
 
 // =======================================Bark App通知设置区域===========================================
 //此处填你BarkAPP的信息(IP/设备码，例如：https://api.day.app/XXXXXXXX)
@@ -152,7 +164,7 @@ if(isnewql){
 let Fileexists = fs.existsSync(strCKFile);
 let TempCK = [];
 if (Fileexists) {
-    //console.log("检测到别名缓存文件CKName_cache.json，载入...");
+    console.log("检测到别名缓存文件CKName_cache.json，载入...");
     TempCK = fs.readFileSync(strCKFile, 'utf-8');
     if (TempCK) {
         TempCK = TempCK.toString();
@@ -163,7 +175,7 @@ if (Fileexists) {
 let UidFileexists = fs.existsSync(strUidFile);
 let TempCKUid = [];
 if (UidFileexists) {
-    //console.log("检测到一对一Uid文件WxPusherUid.json，载入...");
+    console.log("检测到一对一Uid文件WxPusherUid.json，载入...");
     TempCKUid = fs.readFileSync(strUidFile, 'utf-8');
     if (TempCKUid) {
         TempCKUid = TempCKUid.toString();
@@ -181,11 +193,16 @@ let Notify_SkipText = [];
 let isLogin = false;
 if (process.env.NOTIFY_SHOWNAMETYPE) {
     ShowRemarkType = process.env.NOTIFY_SHOWNAMETYPE;
+    if (ShowRemarkType == "2")
+        console.log("检测到显示备注名称，格式为: 京东别名(备注)");
+    if (ShowRemarkType == "3")
+        console.log("检测到显示备注名称，格式为: 京东账号(备注)");
+    if (ShowRemarkType == "4")
+        console.log("检测到显示备注名称，格式为: 备注");
 }
-async function sendNotify(text, desp, params = {}, author = "\n================================\n好物推荐：https://u.jd.com/WLEVYTM",strsummary="") {
-    console.log(`开始发送通知...`); 
-	
-	//NOTIFY_FILTERBYFILE代码来自Ca11back.
+async function sendNotify(text, desp, params = {}, author = '\n\n本通知 By https://github.com/KingRan/KR',strsummary="") {
+    console.log(`开始发送通知...`);
+
     if (process.env.NOTIFY_FILTERBYFILE) {
         var no_notify = process.env.NOTIFY_FILTERBYFILE.split('&');
         if (module.parent.filename) {
@@ -210,7 +227,6 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
         GOBOT_TOKEN = '';
         GOBOT_QQ = '';
         SCKEY = '';
-		PUSHDEER_KEY= '';
         BARK_PUSH = '';
         BARK_SOUND = '';
         BARK_GROUP = 'QingLong';
@@ -234,7 +250,6 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
 
         //变量开关
         var Use_serverNotify = true;
-		var Use_pushdeerNotify = true;
         var Use_pushPlusNotify = true;
         var Use_BarkNotify = true;
         var Use_tgBotNotify = true;
@@ -274,17 +289,10 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
 
             if (Notify_CKTask) {
                 console.log("触发CK脚本，开始执行....");
-                await exec(`ps -ef|grep -v grep|grep ${Notify_CKTask}`, async function (err, stdout, stderr){
-                if (!stdout) {
-                             Notify_CKTask = "task " + Notify_CKTask + " now";
-                             console.log(Notify_CKTask)
-                             await exec(Notify_CKTask);
-                } else {
-                             console.log('已有相同任务在执行,跳过此次执行！\n')
-                             return
-                       }
-                })
-
+                Notify_CKTask = "task " + Notify_CKTask + " now";
+                await exec(Notify_CKTask, function (error, stdout, stderr) {
+                    console.log(error, stdout, stderr)
+                });
             }
         }
         if (process.env.NOTIFY_AUTOCHECKCK == "true") {
@@ -374,7 +382,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
                                 if (DisableCkBody.code == 200) {
                                     console.log(`京东账号` + strdecPtPin + `已失效,自动禁用成功!\n`);
 
-                                    strNotifyOneTemp = `京东账号: ` + strdecPtPin + ` 已失效,已自动禁用!\n如果要继续挂机，请重新登录账号，账号有效期为30天.`;
+                                    strNotifyOneTemp = `京东账号: ` + strdecPtPin + ` 已失效,自动禁用成功!\n如果要继续挂机，请联系管理员重新登录账号，账号有效期为30天.`;
                                     strNotifyOneTemp += "\n任务标题：" + strtext;
                                     if (strAllNotify)
                                         strNotifyOneTemp += `\n` + strAllNotify;
@@ -385,7 +393,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
 
                                 } else {
                                     console.log(`京东账号` + strPtPin + `已失效,自动禁用失败!\n`);
-                                    strNotifyOneTemp = `京东账号: ` + strdecPtPin + ` 已失效!\n如果要继续挂机，请重新登录账号，账号有效期为30天.`;
+                                    strNotifyOneTemp = `京东账号: ` + strdecPtPin + ` 已失效!\n如果要继续挂机，请联系管理员重新登录账号，账号有效期为30天.`;
                                     strNotifyOneTemp += "\n任务标题：" + strtext;
                                     if (strAllNotify)
                                         strNotifyOneTemp += `\n` + strAllNotify;
@@ -465,7 +473,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             var strPtPin = await GetPtPin(text);
             var strdecPtPin = decodeURIComponent(strPtPin);
             if (strPtPin) {
-                await sendNotifybyWxPucher("汪汪乐园领取通知", `【京东账号】${strdecPtPin}\n当前等级: 30\n请到京东极速版APP提现6.66\n活动入口：京东极速版APP->我的->汪汪乐园->点礼包`, strdecPtPin);
+                await sendNotifybyWxPucher("汪汪乐园领取通知", `【京东账号】${strdecPtPin}\n当前等级: 30\n已自动领取最高等级奖励\n请前往京东极速版APP查看使用优惠券\n活动入口：京东极速版APP->我的->优惠券->京券`, strdecPtPin);
             }
         }
 
@@ -491,7 +499,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
         const titleIndexGp5 = notifyGroup5List.findIndex((item) => item === strTitle);
         const notifyGroup6List = process.env.NOTIFY_GROUP6_LIST ? process.env.NOTIFY_GROUP6_LIST.split('&') : [];
         const titleIndexGp6 = notifyGroup6List.findIndex((item) => item === strTitle);
-		    const notifyGroup7List = process.env.NOTIFY_GROUP7_LIST ? process.env.NOTIFY_GROUP7_LIST.split('&') : [];
+		const notifyGroup7List = process.env.NOTIFY_GROUP7_LIST ? process.env.NOTIFY_GROUP7_LIST.split('&') : [];
         const titleIndexGp7 = notifyGroup7List.findIndex((item) => item === strTitle);
 		
         if (titleIndex2 !== -1) {
@@ -514,7 +522,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             console.log(`${strTitle} 在群组6推送名单中，初始化群组推送`);
             UseGroupNotify = 6;
         }
-	    	if (titleIndexGp7 !== -1) {
+		if (titleIndexGp7 !== -1) {
             console.log(`${strTitle} 在群组7推送名单中，初始化群组推送`);
             UseGroupNotify = 7;
         }
@@ -553,14 +561,13 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
                             console.log("自定义设定强制使用组6配置通知...");
                             UseGroupNotify = 6;
                         }
-					             	if (strCustomTempArr[1] == "组7") {
+						if (strCustomTempArr[1] == "组7") {
                             console.log("自定义设定强制使用组6配置通知...");
                             UseGroupNotify = 7;
                         }
                         if (strCustomTempArr.length > 2) {
                             console.log("关闭所有通知变量...");
                             Use_serverNotify = false;
-							Use_pushdeerNotify = false;
                             Use_pushPlusNotify = false;
                             Use_pushPlushxtripNotify = false;
                             Use_BarkNotify = false;
@@ -578,10 +585,6 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
                                     Use_serverNotify = true;
                                     console.log("自定义设定启用Server酱进行通知...");
                                     break;
-                                case "pushdeer":
-                                    Use_pushdeerNotify = true;
-                                    console.log("自定义设定启用pushdeer进行通知...");
-                                    break;									
                                 case "pushplus":
                                     Use_pushPlusNotify = true;
                                     console.log("自定义设定启用pushplus(推送加)进行通知...");
@@ -652,11 +655,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             if (process.env.PUSH_KEY && Use_serverNotify) {
                 SCKEY = process.env.PUSH_KEY;
             }
-			
-            if (process.env.DEER_KEY && Use_pushdeerNotify) {
-                PUSHDEER_KEY = process.env.DEER_KEY;
-            }
-			
+
             if (process.env.WP_APP_TOKEN && Use_WxPusher) {
                 WP_APP_TOKEN = process.env.WP_APP_TOKEN;
             }
@@ -766,11 +765,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             if (process.env.PUSH_KEY2 && Use_serverNotify) {
                 SCKEY = process.env.PUSH_KEY2;
             }
-			
-            if (process.env.DEER_KEY2 && Use_pushdeerNotify) {
-                PUSHDEER_KEY = process.env.DEER_KEY2;
-            }
-			
+
             if (process.env.WP_APP_TOKEN2 && Use_WxPusher) {
                 WP_APP_TOKEN = process.env.WP_APP_TOKEN2;
             }
@@ -874,11 +869,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             if (process.env.PUSH_KEY3 && Use_serverNotify) {
                 SCKEY = process.env.PUSH_KEY3;
             }
-			
-            if (process.env.DEER_KEY3 && Use_pushdeerNotify) {
-                PUSHDEER_KEY = process.env.DEER_KEY3;
-            }
-			
+
             if (process.env.WP_APP_TOKEN3 && Use_WxPusher) {
                 WP_APP_TOKEN = process.env.WP_APP_TOKEN3;
             }
@@ -983,11 +974,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             if (process.env.PUSH_KEY4 && Use_serverNotify) {
                 SCKEY = process.env.PUSH_KEY4;
             }
-			
-            if (process.env.DEER_KEY4 && Use_pushdeerNotify) {
-                PUSHDEER_KEY = process.env.DEER_KEY4;
-            }
-			
+
             if (process.env.WP_APP_TOKEN4 && Use_WxPusher) {
                 WP_APP_TOKEN = process.env.WP_APP_TOKEN4;
             }
@@ -1092,11 +1079,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             if (process.env.PUSH_KEY5 && Use_serverNotify) {
                 SCKEY = process.env.PUSH_KEY5;
             }
-			
-            if (process.env.DEER_KEY5 && Use_pushdeerNotify) {
-                PUSHDEER_KEY = process.env.DEER_KEY5;
-            }
-			
+
             if (process.env.WP_APP_TOKEN5 && Use_WxPusher) {
                 WP_APP_TOKEN = process.env.WP_APP_TOKEN5;
             }
@@ -1200,11 +1183,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             if (process.env.PUSH_KEY6 && Use_serverNotify) {
                 SCKEY = process.env.PUSH_KEY6;
             }
-			
-            if (process.env.DEER_KEY6 && Use_pushdeerNotify) {
-                PUSHDEER_KEY = process.env.DEER_KEY6;
-            }
-			
+
             if (process.env.WP_APP_TOKEN6 && Use_WxPusher) {
                 WP_APP_TOKEN = process.env.WP_APP_TOKEN6;
             }
@@ -1307,10 +1286,6 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
 
             if (process.env.PUSH_KEY7 && Use_serverNotify) {
                 SCKEY = process.env.PUSH_KEY7;
-            }
-
-            if (process.env.DEER_KEY7 && Use_pushdeerNotify) {
-                PUSHDEER_KEY = process.env.DEER_KEY7;
             }
 
             if (process.env.WP_APP_TOKEN7 && Use_WxPusher) {
@@ -1418,7 +1393,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
                 }
 
                 if (allCode) {
-                    desp += '\n' + '\n' + "ccwav格式化后的互助码:" + '\n' + allCode;
+                    desp += '\n' + '\n' + "格式化后的互助码:" + '\n' + allCode;
                 }
             }
         }
@@ -1430,7 +1405,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             if (envs[0]) {
                 var strTempdesp = [];
                 var strAllNotify = "";
-                if (text == "京东资产统计" || text == "京东资产统计#2" || text == "京东资产统计#3" || text == "京东资产统计#4") {
+                if (text == "京东资产变动" || text == "京东资产变动#2" || text == "京东资产变动#3" || text == "京东资产变动#4") {
                     strTempdesp = desp.split('🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏');
                     if (strTempdesp.length == 2) {
                         strAllNotify = strTempdesp[0];
@@ -1495,7 +1470,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
                             //额外处理1，nickName包含星号
                             $.nickName = $.nickName.replace(new RegExp(`[*]`, 'gm'), "[*]");
                             text = text.replace(new RegExp(`${$.UserName}|${$.nickName}`, 'gm'), $.Remark);
-                            if (text == "京东资产统计" || text == "京东资产统计#2" || text == "京东资产统计#3" || text == "京东资产统计#4") {
+                            if (text == "京东资产变动" || text == "京东资产变动#2" || text == "京东资产变动#3" || text == "京东资产变动#4") {
                                 var Tempinfo = "";
 								if(envs[i].created)
 									Tempinfo=getQLinfo(cookie, envs[i].created, envs[i].timestamp, envs[i].remarks);
@@ -1606,8 +1581,7 @@ async function sendNotify(text, desp, params = {}, author = "\n=================
             iGotNotify(text, desp, params), //iGot
             gobotNotify(text, desp), //go-cqhttp
             gotifyNotify(text, desp), //gotify
-            wxpusherNotify(text, desp), // wxpusher
-            PushDeerNotify(text, desp) //pushdeer推送
+            wxpusherNotify(text, desp) // wxpusher
         ]);
 }
 
@@ -1674,9 +1648,9 @@ function getQLinfo(strCK, intcreated, strTimestamp, strRemark) {
         var UseDay = Math.ceil((DateToday.getTime() - DateCreated.getTime()) / 86400000);
         var LogoutDay = 30 - Math.ceil((DateToday.getTime() - DateTimestamp.getTime()) / 86400000);
         if (LogoutDay < 1) {
-            strReturn = "\n【登录信息】已服务" + UseDay + "天(账号即将到期，请重登续期)"
+            strReturn = "\n【登录信息】总挂机" + UseDay + "天(账号即将到期，请重登续期)"
         } else {
-            strReturn = "\n【登录信息】已服务" + UseDay + "天(有效期约剩" + LogoutDay + "天)"
+            strReturn = "\n【登录信息】总挂机" + UseDay + "天(有效期约剩" + LogoutDay + "天)"
         }
 
     }
@@ -1700,14 +1674,14 @@ function getRemark(strRemark) {
     }
 }
 
-async function sendNotifybyWxPucher(text, desp, PtPin, author = '\n================================\n好物推荐：<a href="https://u.jd.com/WLEVYTM">https://u.jd.com/WLEVYTM</a>', strsummary = "") {
+async function sendNotifybyWxPucher(text, desp, PtPin, author = '\n\n本通知 By ccwav Mod', strsummary = "") {
 
     try {
         var Uid = "";
         var UserRemark = "";
         var strTempdesp = [];
         var strAllNotify = "";
-        if (text == "京东资产统计") {
+        if (text == "京东资产变动") {
             strTempdesp = desp.split('🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏🎏');
             if (strTempdesp.length == 2) {
                 strAllNotify = strTempdesp[0];
@@ -1728,7 +1702,7 @@ async function sendNotifybyWxPucher(text, desp, PtPin, author = '\n=============
                     WP_UIDS_ONE = Uid;
                     console.log("正在发送一对一通知,请稍后...");
 
-                    if (text == "京东资产统计") {
+                    if (text == "京东资产变动") {
                         try {
                             $.nickName = "";
                             $.FoundPin = "";
@@ -1832,7 +1806,7 @@ async function GetPtPin(text) {
                     return strPtPin;
                 } else {
                     console.log(`别名反查PtPin失败: 1.用户更改了别名 2.可能是新用户，别名缓存还没有。`);
-                    return strNickName;
+                    return "";
                 }
             }
         } else {
@@ -2213,9 +2187,9 @@ function buildLastDesp(desp, author = '') {
         return desp.trim();
     } else {
         if (!author.match(/本通知 By/)) {
-            author = `\n\n${author}`
+            author = `\n\n本通知 By ${author}`
         }
-        return desp.trim() + author + "\n现在时刻: " + GetDateTime(new Date());
+        return desp.trim() + author + "\n通知时间: " + GetDateTime(new Date());
     }
 }
 
@@ -2640,52 +2614,6 @@ function wxpusherNotify(text, desp) {
             resolve();
         }
     });
-}
-
-function PushDeerNotify(text, desp, time = 2100) {
-  return new Promise((resolve) => {
-    if (PUSHDEER_KEY) {
-      desp = encodeURI(desp);
-      desp = desp.replace(/%0A/g, '%0A%0A');
-      const options = {
-        url: `https://api2.pushdeer.com/message/push`,
-        body: `pushkey=${PUSHDEER_KEY}&text=${text}&desp=${desp}&type=markdown`,
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        timeout,
-      };
-      setTimeout(() => {
-        $.post(options, (err, resp, data) => {
-          try {
-            if (err) {
-              console.log('发送通知调用API失败！！\n');
-              console.log(err);
-            } else {
-              data = JSON.parse(data);
-              // 通过返回的result的长度来判断是否成功
-              if (
-                data.content.result.length !== undefined &&
-                data.content.result.length > 0
-              ) {
-                console.log('PushDeer发送通知消息成功🎉\n');
-              } else {
-                console.log(
-                  `PushDeer发送通知消息异常\n${JSON.stringify(data)}`,
-                );
-              }
-            }
-          } catch (e) {
-            $.logErr(e, resp);
-          } finally {
-            resolve(data);
-          }
-        });
-      }, time);
-    } else {
-      resolve();
-    }
-  });
 }
 
 function GetDateTime(date) {

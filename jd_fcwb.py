@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 '''
-定时自定义
-35 15 27 5 * jd_fcwb.py
+cron: 1 1 1 1 *
 new Env('发财挖宝');
-活动入口: 京东极速版>我的>发财挖宝
-脚本功能为: 挖宝，提现，没有助力功能! 
-当血量剩余 1 时停止挖宝，领取奖励并提现
+活动入口: 京东极速版 > 我的 > 发财挖宝
+最高可得总和为10元的微信零钱和红包
+脚本功能为: 挖宝，提现，没有助力功能，当血量剩余 1 时停止挖宝，领取奖励并提现 
+
+目前需要完成逛一逛任务并且下单任务才能通关，不做的话大概可得1.5～2块的微信零钱
 '''
 import os,json,random,time,re,string,functools,asyncio
-import urllib.parse
 import sys
 sys.path.append('../../tmp')
-print('\n挖的如果都是0.01红包就是黑了！第一次使用脚本前手动进活动做完新手引导，也许可能减少黑的可能\n')
-print('\n当血量剩余 1 时停止挖宝，领取奖励并提现，请先跑助力补充体力\n')
+print('\n运行本脚本之前请手动进入游戏点击一个方块\n')
+print('\n挖的如果都是0.01红包就是黑了，别挣扎了！\n')
+print('\n默认自动领取奖励，关闭请在代码383行加上#号注释即可\n')
 try:
     import requests
 except Exception as e:
@@ -164,9 +165,9 @@ def happyDigHome(cookie):
     if res['code']==0:
         if res['success']:
             curRound=res['data']['curRound']                        # 未知
-            incep_blood=res['data']['blood']                              # 剩余血量
+            incep_blood=res['data']['blood']                        # 剩余血量
             roundList=res['data']['roundList']                      # 3个总池子
-            for e,roundList_n in enumerate(roundList):                           # 迭代每个池子
+            for e,roundList_n in enumerate(roundList):              # 迭代每个池子
                 roundid=roundList_n['round']                        # 池序号
                 state=roundList_n['state'] 
                 rows=roundList_n['rows']                            # 池规模，rows*rows
@@ -217,20 +218,20 @@ def happyDigHome(cookie):
         print(f'获取数据失败\n{res}\n')
 
 
-# # 玩一玩
-# def apDoTask(cookie):
-#     print('开始 玩一玩')
-#     body={"linkId":linkId,"taskType":"BROWSE_CHANNEL","taskId":454,"channel":4,"itemId":"https%3A%2F%2Fsignfree.jd.com%2F%3FactivityId%3DPiuLvM8vamONsWzC0wqBGQ","checkVersion":False}
-#     res=taskGetUrl('apDoTask', body, cookie)
-#     if not res:
-#         return
-#     try:    
-#         if res['success']:
-#             print('任务完成，获得血量 1\n')
-#         else:
-#             print(f"{res['errMsg']}\n")
-#     except:
-#         print(f"错误\n{res}\n")
+ # 玩一玩
+def apDoTask(cookie):
+     print('开始做玩一玩任务')
+     body={"linkId":linkId,"taskType":"BROWSE_CHANNEL","taskId":454,"channel":4,"itemId":"https%3A%2F%2Fsignfree.jd.com%2F%3FactivityId%3DPiuLvM8vamONsWzC0wqBGQ","checkVersion":False}
+     res=taskGetUrl('apDoTask', body, cookie)
+     if not res:
+         return
+     try:    
+         if res['success']:
+             print('玩好了')
+         else:
+             print(f"{res['errMsg']}")
+     except:
+         print(f"错误\n{res}")
     
 
 # 挖宝
@@ -397,7 +398,8 @@ def main():
     print(f'====================共{len(cookie_list)}京东个账号Cookie=========\n')
 
     for e,cookie in enumerate(cookie_list,start=1):
-        print(f'******开始【账号 {e}】 {urllib.parse.unquote(get_pin(cookie))} *********\n')
+        print(f'******开始【账号 {e}】 {get_pin(cookie)} *********\n')
+        apDoTask(cookie)
         happyDigHome(cookie)
         spring_reward_list(cookie)
 
