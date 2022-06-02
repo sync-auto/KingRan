@@ -3,9 +3,8 @@
 探味奇遇记
 活动入口：美食馆-右侧悬浮
 活动时间：5月17-6月16
-宝箱陆续开放
-来自：6dylan6/jdpro
-31 0,13 26-31,1-16 5,6 * jd_tanwei.js
+宝箱任务陆续开放
+31 1 * * * https://raw.githubusercontent.com/6dylan6/jdpro/main/jd_tanwei.js
  */
 
 const $ = new Env('探味奇遇记');
@@ -68,12 +67,12 @@ async function twqyj() {
         } else if (new Date(vo.assignmentStartTime).getTime() > Date.now()) {
             console.log('此任务还没到开放时间:',vo.assignmentStartTime)
         } else {
-		    if (vo.ext && vo.ext.extraType == 'sign1'){
+		    if (vo.ext && vo.ext.extraType == 'sign1') {
 	              await sign(encryptProjectId,vo.encryptAssignmentId)
             } else {
 			      await dotask(encryptProjectId,vo.encryptAssignmentId)
-	               }
-               }
+	          }
+          }
 	    await $.wait(1000)    
 	}
   } catch (e) {
