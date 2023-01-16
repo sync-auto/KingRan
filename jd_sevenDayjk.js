@@ -2,7 +2,7 @@
 活动名称：店铺签到 · 超级无线
 
 变量：COOKIE_NUM='' //运行账号数量
-jd_sevenDay_activityUrl='' // 活动链接，支持市面上大部分签到，自测
+jd_sevenDay_activityUrl='' // 活动链接，支持市面上大部分签到，自测 PS：瞎编的，LZ CJ的没问题
 
 //可能也会有很多毛病，请反馈
 
